@@ -137,22 +137,34 @@ func (pp *ParquetParser) Close() error {
 func (pp *ParquetParser) ReadRow() error {
 	pp.lastRow.RowID++
 	if pp.curIndex >= len(pp.rows) {
-		if pp.readRows >= pp.Reader.GetNumRows() {
-			return io.EOF
-		}
-		count := batchReadRowSize
-		if pp.Reader.GetNumRows()-pp.readRows < int64(count) {
-			count = int(pp.Reader.GetNumRows() - pp.readRows)
-		}
+		for i := 0; i < 5; i++ {
+			if pp.readRows >= pp.Reader.GetNumRows() {
+				return io.EOF
+			}
+			count := batchReadRowSize
+			if pp.Reader.GetNumRows()-pp.readRows < int64(count) {
+				count = int(pp.Reader.GetNumRows() - pp.readRows)
+			}
 
-		var err error
-		pp.rows, err = pp.Reader.ReadByNumber(count)
-		if err != nil {
-			return errors.Trace(err)
+			var err error
+			pp.rows, err = pp.Reader.ReadByNumber(count)
+			if err != nil {
+				return errors.Trace(err)
+			}
+
+			if len(pp.rows) > 0 {
+				pp.curStart = pp.readRows
+				pp.readRows += int64(len(pp.rows))
+				pp.curIndex = 0
+				break
+			}
+
+			if i == 5 {
+				return errors.New("retry read from parquet file return 0 rows")
+			}
+
+			log.L().Warn("read from parquet file return 0 rows, will retry", zap.Int("retry", i))
 		}
-		pp.curStart = pp.readRows
-		pp.readRows += int64(len(pp.rows))
-		pp.curIndex = 0
 	}
 
 	row := pp.rows[pp.curIndex]
