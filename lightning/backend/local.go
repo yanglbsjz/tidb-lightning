@@ -53,7 +53,6 @@ import (
 
 	"github.com/pingcap/tidb-lightning/lightning/common"
 	"github.com/pingcap/tidb-lightning/lightning/log"
-	"github.com/pingcap/tidb-lightning/lightning/manual"
 	"github.com/pingcap/tidb-lightning/lightning/worker"
 )
 
@@ -770,16 +769,14 @@ func (c *bytesRecycleChan) Acquire() []byte {
 	case b := <-c.ch:
 		return b
 	default:
-		return manual.New(1 << 20) // 1M
+		return make([]byte, 1<<20) // 1M
 	}
 }
 
 func (c *bytesRecycleChan) Release(w []byte) {
 	select {
 	case c.ch <- w:
-		return
 	default:
-		manual.Free(w)
 	}
 }
 
